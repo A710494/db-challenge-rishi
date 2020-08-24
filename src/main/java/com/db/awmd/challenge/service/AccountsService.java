@@ -7,6 +7,7 @@ import com.db.awmd.challenge.transaction.AccountTransactionManager;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
@@ -33,6 +34,9 @@ public class AccountsService {
         this.transactionManager = new AccountTransactionManager(accountsRepository);
     }
 
+    @Value("${account.not.exist}")
+    private String nonExistingAccount;
+
     public void createAccount(Account account) {
         this.accountsRepository.createAccount(account);
     }
@@ -56,14 +60,16 @@ public class AccountsService {
         notifyCustomer(fromAccount, toAccount, transferAmount);
     }
 
+    /**
+     * Take repository from transaction manager in order to manage transactions and rollBack.
+     * But, This method will only be transactional only if this is called within "transactionManager.doInTransaction()
+     * OR method annotated with @AccountTransaction.
+     */
     private Account debit(String accountId, BigDecimal amount) throws AmountTransferException {
         log.debug("Withdrawing funds from the source account id: {}", accountId);
-        // take repository from transaction manager in order to manage transactions and rollBack.
-        //But, This method will only be transactional only if this is called within "transactionManager.doInTransaction()
-        // OR method annotated with @AccountTransaction.
         final Account account = transactionManager.getRepoProxy().getAccount(accountId);
         if (account == null) {
-            throw new AmountTransferException("Account does not exist");
+            throw new AmountTransferException(nonExistingAccount);
         }
         if (account.getBalance().compareTo(amount) == -1) {
             throw new AmountTransferException("Insufficient balance in account");
@@ -73,18 +79,20 @@ public class AccountsService {
         return account;
     }
 
+     /* Take repository from transaction manager in order to manage transactions and rollBack.
+     *  But, This method will only be transactional only if this is called within "transactionManager.doInTransaction()
+     *  OR method annotated with @AccountTransaction.
+     */
     private Account credit(String accountId, BigDecimal amount) throws AmountTransferException {
         log.debug("Depositing funds to target account id: {}", accountId);
-        // take repository from transaction manager in order to manage transactions and rollBack.
-        //But, This method will only be transactional only if this is called within "transactionManager.doInTransaction()
-        // OR method annotated with @AccountTransaction.
+
         final AccountsRepository accountRepo = transactionManager.getRepoProxy();
         if (accountRepo == null) {
-            throw new AmountTransferException("Account does not exist");
+            throw new AmountTransferException(nonExistingAccount);
         }
         final Account account = accountRepo.getAccount(accountId);
         if (account == null) {
-            throw new AmountTransferException("Account does not exist");
+            throw new AmountTransferException(nonExistingAccount);
         }
         BigDecimal bal = account.getBalance().add(amount);
         account.setBalance(bal);

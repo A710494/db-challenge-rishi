@@ -18,7 +18,7 @@ public class AmountTransfer {
     private String accountTo;
 
     @NotNull
-    @Min(value = 0, message = "Initial balance must be positive.")
+    @Min(value = 0, message = "${balance.more.than.zero}")
     private BigDecimal transferAmount;
 
     @JsonCreator
